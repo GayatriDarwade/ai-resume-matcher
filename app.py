@@ -1,6 +1,7 @@
 from flask import Flask, render_template, request, jsonify
 import numpy as np
 import logging
+import gc
 from functools import lru_cache
 from resume_ingest import load_index, ingest_resumes, save_index
 from ai_utils import (
@@ -22,7 +23,8 @@ app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50MB max upload
 index, metadata = load_index()
 
 # Embedding model for queries
-embedder = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
+embedder = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2", device="cpu")
+embedder.eval()  # Set to eval mode to reduce memory
 
 # Cache for job descriptions
 job_cache = {}

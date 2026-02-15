@@ -17,7 +17,8 @@ logger = logging.getLogger(__name__)
 # ------------------------------
 # Initialize embedding model
 # ------------------------------
-embedder = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
+embedder = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2", device="cpu")
+embedder.eval()  # Set to eval mode to reduce memory
 
 # FAISS index (L2 similarity)
 embedding_dim = 384  # all-MiniLM-L6-v2 output size

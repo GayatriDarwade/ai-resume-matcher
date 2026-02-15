@@ -64,3 +64,6 @@ Thumbs.db
 *.temp
 *.bak
 ~*
+
+# Sample/test files
+sample_job_description.txt

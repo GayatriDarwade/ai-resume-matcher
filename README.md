@@ -69,18 +69,50 @@ Still very accurate with local processing:
 
 ## 🚢 Deployment
 
+### One-Click Deploy to Render (Free)
+
+1. **Push to GitHub**:
+   ```bash
+   git remote add origin https://github.com/YOUR_USERNAME/ai-resume-matcher.git
+   git branch -M main
+   git push -u origin main
+   ```
+
+2. **Deploy on Render**:
+   - Go to https://dashboard.render.com/
+   - Click "New +" → "Web Service"
+   - Connect your GitHub repository
+   - Configure:
+     - **Name**: `ai-resume-matcher`
+     - **Build Command**: `pip install -r requirements.txt`
+     - **Start Command**: `gunicorn --bind 0.0.0.0:$PORT --timeout 120 --workers 1 app:app`
+     - **Instance Type**: Free (512 MB RAM)
+   - Click "Create Web Service"
+   - Wait 5-10 minutes for deployment
+
+3. **Access Your App**: 
+   - URL: `https://your-app-name.onrender.com`
+   - Upload resumes and start matching!
+
+### Free Tier Limits
+- ✅ **750 hours/month** (enough for 24/7)
+- ✅ **512 MB RAM** (handles ~50-100 resumes)
+- ⚠️ **Spins down after 15 min inactivity** (30s wake up)
+- ✅ **Unlimited searches** - no API quotas!
+
+### Alternative Hosting
+Works on any platform with Python 3.10+:
+- **Railway** ($5/month) - No spin-down
+- **DigitalOcean** ($6/month) - 1GB RAM
+- **AWS EC2** (Free tier) - t2.micro
+- **PythonAnywhere** ($5/month) - Beginner-friendly
+- **Your VPS** - Complete control
+
 ### Requirements
 - **RAM:** 2GB minimum, 4GB recommended
 - **CPU:** Any modern CPU (no GPU needed!)
 - **Disk:** 500MB for models + storage
 - **OS:** Linux, Windows, or macOS
-
-### Deploy Anywhere
-Works on cheap hosting ($5-10/month):
-- ✓ Railway, Fly.io, DigitalOcean
-- ✓ AWS EC2 t2.micro (Free tier)
-- ✓ Heroku, Render
-- ✓ Your own VPS
 
 ## 📁 File Structure
 ```

@@ -177,6 +177,75 @@ def ingest_resumes(resume_folder: str = "data/resumes") -> int:
     logger.info(f"Ingestion complete: {ingested_count} added, {skipped_duplicates} duplicates, {skipped_errors} errors. Total: {len(metadata)}")
     return ingested_count
 
+
+def ingest_resume_files(file_paths: list[str]) -> int:
+    """Ingest only the provided resume files.
+
+    This is used by the upload flow so a single request does not reprocess
+    the entire resume corpus on every upload.
+    """
+    global metadata, file_hashes
+
+    existing_files = {m["file"] for m in metadata}
+    existing_hashes = set(file_hashes.values())
+
+    ingested_count = 0
+    skipped_duplicates = 0
+    skipped_errors = 0
+
+    for fpath in file_paths:
+        fname = os.path.basename(fpath)
+
+        if not os.path.isfile(fpath) or not fname.endswith((".pdf", ".docx")):
+            continue
+
+        if fname in existing_files:
+            logger.info(f"Skipping already ingested: {fname}")
+            continue
+
+        try:
+            file_hash = compute_file_hash(fpath)
+            if file_hash in existing_hashes:
+                logger.info(f"Duplicate content detected for {fname}, skipping")
+                skipped_duplicates += 1
+                continue
+
+            text, embedding = process_resume(fpath)
+
+            try:
+                skills = extract_skills(text[:MAX_TEXT_CHARS_FOR_SKILLS], text_type="resume")
+            except Exception as e:
+                logger.warning(f"Failed to extract skills for {fname}: {e}")
+                skills = {
+                    "technical_skills": [],
+                    "soft_skills": [],
+                    "tools": [],
+                    "certifications": []
+                }
+
+            index.add(np.array([embedding], dtype=np.float32))
+            metadata.append({
+                "file": fname,
+                "preview_text": text[:PREVIEW_TEXT_CHARS],
+                "hash": file_hash,
+                "skills": skills
+            })
+            file_hashes[fname] = file_hash
+            logger.info(f"Ingested: {fname}")
+            ingested_count += 1
+            del text, embedding
+        except Exception as e:
+            logger.error(f"Failed to ingest {fname}: {e}")
+            skipped_errors += 1
+
+    if ingested_count:
+        gc.collect()
+
+    logger.info(
+        f"Incremental ingestion complete: {ingested_count} added, {skipped_duplicates} duplicates, {skipped_errors} errors. Total: {len(metadata)}"
+    )
+    return ingested_count
+
 # -------- Save FAISS + Metadata --------
 def save_index() -> bool:
     """Save FAISS index and metadata to disk."""

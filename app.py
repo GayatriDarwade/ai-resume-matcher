@@ -4,7 +4,7 @@ import numpy as np
 import logging
 import gc
 from functools import lru_cache
-from resume_ingest import load_index, ingest_resumes, save_index
+from resume_ingest import load_index, ingest_resumes, ingest_resume_files, save_index
 from ai_utils import (
     analyze_resume_match,
     extract_skills,
@@ -164,17 +164,19 @@ def upload_resumes():
         os.makedirs(upload_folder, exist_ok=True)
         
         uploaded_files = []
+        uploaded_paths = []
         for file in files:
             if file and (file.filename.endswith('.pdf') or file.filename.endswith('.docx')):
                 filename = secure_filename(file.filename)
                 file_path = os.path.join(upload_folder, filename)
                 file.save(file_path)
                 uploaded_files.append(filename)
+                uploaded_paths.append(file_path)
                 logger.info(f"Uploaded: {filename}")
         
         if uploaded_files:
-            # Re-ingest resumes
-            count = ingest_resumes(upload_folder)
+            # Ingest only the newly uploaded files to keep the request fast.
+            count = ingest_resume_files(uploaded_paths)
             save_index()
             return jsonify({
                 "success": True,

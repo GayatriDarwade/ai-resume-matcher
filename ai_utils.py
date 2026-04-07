@@ -7,13 +7,18 @@ import os
 import logging
 import re
 from sentence_transformers import SentenceTransformer
+from functools import lru_cache
 from typing import Dict, List, Set
 
 # Setup logging
 logger = logging.getLogger(__name__)
 
-# Load local embedding model (CPU-friendly, no quotas, no API)
-local_embedding_model = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
+@lru_cache(maxsize=1)
+def get_local_embedding_model() -> SentenceTransformer:
+    """Create a single shared model instance per process (lazy-loaded)."""
+    model = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2", device="cpu")
+    model.eval()
+    return model
 
 # ----------------------------------------
 # Comprehensive Skills Database
@@ -145,7 +150,8 @@ def get_embedding(text: str) -> List[float]:
         raise ValueError("Text must be a non-empty string")
     
     try:
-        return local_embedding_model.encode(text).tolist()
+        model = get_local_embedding_model()
+        return model.encode(text).tolist()
     except Exception as e:
         logger.error(f"Error generating embedding: {e}")
         raise

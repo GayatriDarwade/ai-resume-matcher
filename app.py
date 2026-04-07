@@ -8,9 +8,9 @@ from ai_utils import (
     analyze_resume_match,
     extract_skills,
     calculate_skills_match,
-    calculate_hybrid_score
+    calculate_hybrid_score,
+    get_local_embedding_model
 )
-from sentence_transformers import SentenceTransformer
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -22,12 +22,9 @@ app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50MB max upload
 # Load FAISS index + metadata
 index, metadata = load_index()
 
-# Embedding model for queries
-embedder = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2", device="cpu")
-embedder.eval()  # Set to eval mode to reduce memory
-
 # Cache for job descriptions
 job_cache = {}
+MAX_JOB_CACHE_SIZE = 100
 
 @app.route("/", methods=["GET", "POST"])
 def home():
@@ -50,6 +47,7 @@ def home():
             
             # Embed job description with error handling
             try:
+                embedder = get_local_embedding_model()
                 job_embedding = embedder.encode([job_text]).reshape(1, -1).astype(np.float32)
             except Exception as e:
                 logger.error(f"Embedding error: {e}")
@@ -111,6 +109,9 @@ def home():
                 resume_data["score"] = resume_data["hybrid_score"]  # For compatibility
             
             # Cache the job
+            if len(job_cache) >= MAX_JOB_CACHE_SIZE:
+                oldest_key = next(iter(job_cache))
+                job_cache.pop(oldest_key, None)
             job_cache[len(job_cache)] = {"job": job_text, "results": top_resumes}
             
             return render_template(

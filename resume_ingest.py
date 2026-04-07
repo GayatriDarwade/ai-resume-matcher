@@ -4,21 +4,14 @@ import numpy as np
 import logging
 import json
 import hashlib
-from sentence_transformers import SentenceTransformer
 from PyPDF2 import PdfReader
 import docx
 import pickle
 from pathlib import Path
-from ai_utils import extract_skills
+from ai_utils import extract_skills, get_local_embedding_model
 
 # Setup logging
 logger = logging.getLogger(__name__)
-
-# ------------------------------
-# Initialize embedding model
-# ------------------------------
-embedder = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2", device="cpu")
-embedder.eval()  # Set to eval mode to reduce memory
 
 # FAISS index (L2 similarity)
 embedding_dim = 384  # all-MiniLM-L6-v2 output size
@@ -85,6 +78,7 @@ def process_resume(file_path: str) -> tuple:
     
     # Get embedding
     try:
+        embedder = get_local_embedding_model()
         embedding = embedder.encode([text])[0]
         return text, embedding
     except Exception as e:

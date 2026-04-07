@@ -3,7 +3,7 @@ import numpy as np
 import logging
 import gc
 from functools import lru_cache
-from resume_ingest import load_index, ingest_resumes, save_index
+from resume_ingest import load_index, ingest_resumes, save_index, load_resume_text_by_filename
 from ai_utils import (
     analyze_resume_match,
     extract_skills,
@@ -88,8 +88,7 @@ def home():
                 
                 candidates.append({
                     "file": file_name,
-                    "text": metadata[idx]["text"][:1000],
-                    "full_text": metadata[idx]["text"],
+                    "text": metadata[idx].get("preview_text", "")[:1000],
                     "semantic_score": round(semantic_score, 2),
                     "skills_score": skills_match["match_score"],
                     "hybrid_score": round(hybrid_score, 2),
@@ -193,7 +192,8 @@ def analyze_resume(resume_filename):
         
         # Get detailed analysis (API call only when user clicks)
         try:
-            analysis = analyze_resume_match(job_text, resume_data["text"], resume_filename)
+            resume_text = load_resume_text_by_filename(resume_filename)
+            analysis = analyze_resume_match(job_text, resume_text, resume_filename)
             return jsonify({
                 "success": True,
                 "analysis": analysis
@@ -229,9 +229,19 @@ def stats():
 def not_found(error):
     return render_template("index.html", error="Page not found"), 404
 
+@app.errorhandler(413)
+def request_too_large(error):
+    if request.path.startswith("/upload"):
+        return jsonify({
+            "error": "Upload too large. Please upload smaller files or fewer files at once."
+        }), 413
+    return render_template("index.html", error="Uploaded content is too large"), 413
+
 @app.errorhandler(500)
 def server_error(error):
     logger.error(f"Server error: {error}")
+    if request.path.startswith("/upload"):
+        return jsonify({"error": "Server error during upload. Please try smaller batches."}), 500
     return render_template("index.html", error="Server error occurred"), 500
 
 

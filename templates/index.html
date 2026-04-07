@@ -668,16 +668,27 @@
                     body: formData
                 });
 
-                const data = await response.json();
+                const raw = await response.text();
+                let data = {};
+                try {
+                    data = raw ? JSON.parse(raw) : {};
+                } catch (parseError) {
+                    data = {
+                        error: `Server returned an unexpected response (HTTP ${response.status}).`
+                    };
+                }
+
                 if (response.ok) {
-                    uploadStatus.innerHTML = `<div class="alert alert-success">✅ ${data.message}</div>`;
+                    const okMessage = data.message || 'Upload completed successfully.';
+                    uploadStatus.innerHTML = `<div class="alert alert-success">✅ ${okMessage}</div>`;
                     selectedFiles = [];
                     updateFileList();
                     fileInput.value = '';
                     uploadBtn.textContent = 'Upload Files';
                     location.reload();
                 } else {
-                    uploadStatus.innerHTML = `<div class="alert alert-error">❌ ${data.error}</div>`;
+                    const errMessage = data.error || `Upload failed (HTTP ${response.status})`;
+                    uploadStatus.innerHTML = `<div class="alert alert-error">❌ ${errMessage}</div>`;
                 }
             } catch (error) {
                 uploadStatus.innerHTML = `<div class="alert alert-error">❌ Upload failed: ${error.message}</div>`;

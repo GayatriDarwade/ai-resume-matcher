@@ -4,6 +4,7 @@ import numpy as np
 import logging
 import json
 import hashlib
+import gc
 from PyPDF2 import PdfReader
 import docx
 import pickle
@@ -25,6 +26,11 @@ os.makedirs(VECTORSTORE_DIR, exist_ok=True)
 
 # Track file hashes to detect duplicates
 file_hashes = {}
+
+# Memory-friendly caps for upload/ingestion
+MAX_TEXT_CHARS_FOR_EMBEDDING = 8000
+MAX_TEXT_CHARS_FOR_SKILLS = 12000
+PREVIEW_TEXT_CHARS = 1200
 
 # -------- PDF Extraction --------
 def extract_text_from_pdf(file_path: str) -> str:
@@ -76,14 +82,30 @@ def process_resume(file_path: str) -> tuple:
     if not text or len(text.strip()) < 10:
         raise ValueError(f"Resume {file_path} contains insufficient text")
     
-    # Get embedding
+    # Keep embedding input bounded to avoid memory spikes on very large resumes.
     try:
+        embedding_text = text[:MAX_TEXT_CHARS_FOR_EMBEDDING]
         embedder = get_local_embedding_model()
-        embedding = embedder.encode([text])[0]
+        embedding = embedder.encode([embedding_text])[0]
         return text, embedding
     except Exception as e:
         logger.error(f"Error embedding resume {file_path}: {e}")
         raise
+
+def load_resume_text_by_filename(filename: str, resume_folder: str = "data/resumes") -> str:
+    """Load full text from disk on demand for a specific resume file."""
+    safe_name = os.path.basename(filename)
+    file_path = os.path.join(resume_folder, safe_name)
+
+    if not os.path.exists(file_path):
+        raise FileNotFoundError(f"Resume file not found: {safe_name}")
+
+    if safe_name.endswith(".pdf"):
+        return extract_text_from_pdf(file_path)
+    if safe_name.endswith(".docx"):
+        return extract_text_from_docx(file_path)
+
+    raise ValueError(f"Unsupported file type: {safe_name}")
 
 # -------- Batch Ingestion (updated) --------
 def ingest_resumes(resume_folder: str = "data/resumes") -> int:
@@ -125,7 +147,7 @@ def ingest_resumes(resume_folder: str = "data/resumes") -> int:
             
             # Extract and cache skills to avoid API calls later
             try:
-                skills = extract_skills(text, text_type="resume")
+                skills = extract_skills(text[:MAX_TEXT_CHARS_FOR_SKILLS], text_type="resume")
             except Exception as e:
                 logger.warning(f"Failed to extract skills for {fname}: {e}")
                 skills = {
@@ -138,13 +160,16 @@ def ingest_resumes(resume_folder: str = "data/resumes") -> int:
             index.add(np.array([embedding], dtype=np.float32))
             metadata.append({
                 "file": fname,
-                "text": text,
+                "preview_text": text[:PREVIEW_TEXT_CHARS],
                 "hash": file_hash,
                 "skills": skills
             })
             file_hashes[fname] = file_hash
             logger.info(f"Ingested: {fname}")
             ingested_count += 1
+            del text, embedding
+            if ingested_count % 5 == 0:
+                gc.collect()
         except Exception as e:
             logger.error(f"Failed to ingest {fname}: {e}")
             skipped_errors += 1
@@ -183,6 +208,13 @@ def load_index() -> tuple:
         index = faiss.read_index(os.path.join(VECTORSTORE_DIR, "resume_index.faiss"))
         with open(os.path.join(VECTORSTORE_DIR, "resume_metadata.pkl"), "rb") as f:
             metadata = pickle.load(f)
+
+        # Migrate older metadata to preview-only format to reduce resident memory.
+        for m in metadata:
+            if "preview_text" not in m:
+                legacy_text = m.get("text", "")
+                m["preview_text"] = legacy_text[:PREVIEW_TEXT_CHARS] if legacy_text else ""
+            m.pop("text", None)
         
         # Rebuild file_hashes from metadata
         file_hashes = {m["file"]: m.get("hash", "") for m in metadata if "hash" in m}

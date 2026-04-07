@@ -1,9 +1,10 @@
+import os
 from flask import Flask, render_template, request, jsonify
 import numpy as np
 import logging
 import gc
 from functools import lru_cache
-from resume_ingest import load_index, ingest_resumes, save_index, load_resume_text_by_filename
+from resume_ingest import load_index, ingest_resumes, save_index
 from ai_utils import (
     analyze_resume_match,
     extract_skills,
@@ -25,6 +26,24 @@ index, metadata = load_index()
 # Cache for job descriptions
 job_cache = {}
 MAX_JOB_CACHE_SIZE = 100
+
+
+def load_resume_text_by_filename(resume_filename):
+    """Load resume text directly from disk when detailed analysis is requested."""
+    resume_folder = "data/resumes"
+    file_path = os.path.join(resume_folder, os.path.basename(resume_filename))
+
+    if not os.path.exists(file_path):
+        raise FileNotFoundError(f"Resume file not found: {resume_filename}")
+
+    if file_path.endswith(".pdf"):
+        from resume_ingest import extract_text_from_pdf
+        return extract_text_from_pdf(file_path)
+    if file_path.endswith(".docx"):
+        from resume_ingest import extract_text_from_docx
+        return extract_text_from_docx(file_path)
+
+    raise ValueError(f"Unsupported file type: {resume_filename}")
 
 @app.route("/", methods=["GET", "POST"])
 def home():
